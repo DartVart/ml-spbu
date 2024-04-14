@@ -65,7 +65,7 @@ def estimate_loss():
     return out
 
 
-class Head(nn.Module):
+class DotProductHead(nn.Module):
     """ one head of self-attention """
 
     def __init__(self, head_size):
@@ -94,13 +94,61 @@ class Head(nn.Module):
         return out
 
 
+class DenseSyntheticHead(nn.Module):
+    """ one head of dense synthetic self-attention """
+
+    def __init__(self, head_size):
+        super().__init__()
+        self.value = nn.Linear(n_embd, head_size, bias=False)
+        self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size)))
+
+        self.dropout = nn.Dropout(dropout)
+
+        # F_{h, l} in paper, the substitution for Q @ K.T
+        self.f_proj = nn.Sequential(
+            nn.Linear(n_embd, n_embd),  # W_{1, h, l} in paper
+            nn.ReLU(),  # σ_R in paper
+            nn.Linear(n_embd, block_size),  # W_{2, h, l} in paper
+        )
+
+    def forward(self, x):
+        B, T, C = x.shape
+
+        wei = self.f_proj(x)[:, :T, :T]  # given context size (time-step) is not necessarily equal to block_size
+        wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf'))
+        wei = F.softmax(wei, dim=-1)
+        wei = self.dropout(wei)
+        v = self.value(x)
+        out = wei @ v
+
+        return out
+
+
+class CombinedHead(nn.Module):
+    """ combination of dot product attention and dense synthetic attention """
+
+    def __init__(self, head_size):
+        super().__init__()
+        self.dp_head = DotProductHead(head_size)
+        self.s_head = DenseSyntheticHead(head_size)
+
+        # learnable parameter from (Narang et al., 2021)
+        self.alpha = nn.Parameter(torch.ones(1))
+
+    def forward(self, x):
+        out = self.alpha * self.dp_head(x) + (1 - self.alpha) * self.s_head(x)
+
+        return out
+
+
 class MultiHeadAttention(nn.Module):
     """ multiple heads of self-attention in parallel """
 
     def __init__(self, num_heads, head_size, with_synthesizer):
         super().__init__()
-        # TODO: make synthesizer!
-        self.heads = nn.ModuleList([None if with_synthesizer else Head(head_size) for _ in range(num_heads)])
+        self.heads = nn.ModuleList([
+            CombinedHead(head_size) if with_synthesizer else DotProductHead(head_size) for _ in range(num_heads)
+        ])
         self.proj = nn.Linear(head_size * num_heads, n_embd)
         self.dropout = nn.Dropout(dropout)
 
