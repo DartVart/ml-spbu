@@ -124,3 +124,39 @@ RsA Aвара
 * folders `old_model` and `new_model` contains data about the old and new models:
   * `[X]_iter` — the model trained on X iterations
   * `losses.csv` and `losses.png` — both files contain training and test losses
+
+## Task 3. Fine-tuning for title generation
+
+Here is the code to fine tune the [cointegrated/rut5-small](https://huggingface.co/cointegrated/rut5-small) model to generate a title from a summarized news ([dataset](https://huggingface.co/datasets/IlyaGusev/gazeta)). 
+
+### Training
+
+To launch training go to `tasks/task3` directory and run:
+```commandline
+python train.py
+```
+
+Example of output:
+```
+Training started...
+Pretrained model is loaded!
+Train and tests datasets are prepared!
+Start training...
+The training is over! The model has been saved.
+```
+
+### Testing
+
+To generate a title go to `tasks/task3`, download the [fine-tuned model](https://drive.google.com/drive/folders/1ZfBynb55OgDeez_mIh3EHVkt9z7b0IhF?usp=sharing) and put it in the `result_model` directory. 
+
+Then run:
+```commandline
+python generate.py article.txt
+```
+
+where `article.txt` — path to the text that contains summarized article text.
+
+Example of output:
+```
+Generated title for article: «Флотилия свободы»: Евросоюз готов досматривать судна
+```
